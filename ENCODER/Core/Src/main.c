@@ -32,6 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -40,8 +41,12 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
+
+UART_HandleTypeDef huart5;
 
 /* USER CODE BEGIN PV */
 
@@ -52,12 +57,62 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_UART5_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int ADC_val;
+uint8_t servo;
+int val;
+
+#define TAMBUFFER 12
+
+typedef struct {
+uint8_t buffer[10];
+uint8_t selector;
+int pos;
+
+}buff;
+uint8_t* pointer;
+uint8_t buffer[10];  //es el bufer de lectura , espacio == 32
+//uint8_t *buff_pointer; // recorre el buffer
+
+
+buff receptor;
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+
+
+if (receptor.selector == 'a'){
+	 HAL_UART_Receive_IT(&huart5, receptor.buffer,  4* sizeof(uint8_t ));
+	 //enviar como ASCI para ganar resolucion y luego convertir
+	 receptor.selector = 0;
+}
+
+if(receptor.selector == 's'){
+	HAL_UART_Receive_IT(&huart5, &servo,   sizeof(servo));
+	receptor.selector = 0;
+
+}
+else HAL_UART_Receive_IT(&huart5, &receptor.selector,  sizeof(uint8_t ));
+
+//	 receptor.pos++;
+ // receptor.buff_pointer =  &receptor.buffer[(receptor.pos)  % TAMBUFFER];
+
+}
+
+
+
+	//}
+
+ // buscar como reiniciar el buffer cuando termine de leer ; hacer por ej buff_pointer- buff[0] % BUFFSIZE
+ // o hacr una struct que tenga un numero con la posicion y operar con ese num .
+// lee mal al principio , hay que tmetelre un epacio y lo hce 2veces(inicilaizacion en non blocking?)
+  // el segundo caracter no envia bien -> so  se muevee bien en memoria? se salta la pos 2 .
 
 /* USER CODE END 0 */
 
@@ -91,183 +146,68 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM2_Init();
   MX_TIM4_Init();
+  MX_ADC1_Init();
+  MX_UART5_Init();
   /* USER CODE BEGIN 2 */
+
   HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
+
+
+
+
+  //inicializar el buffer
+receptor.pos = 0;
+  for(int i = 0; i<10 ; i++){
+	  receptor.buffer[i] = '0';
+  }
+
+  HAL_UART_Receive_IT(&huart5, &receptor.selector, sizeof(uint8_t ));
+
+  receptor.pos = 0;
+
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-if(  (TIM2->CNT ) <200){
+
+
+
+	//procesar la info recibida
+
+receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
+
+if(  (TIM2->CNT ) >(receptor.pos ) ){
 
 /*
-	    if(counter < 20)
-	    	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 250);
-	    if(counter > 20)
-	    	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 50);
-	    if(counter == 20)
-	    	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 150);
+);
 
 */
-HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10, 1);
-HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, 0);
-	    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 1200);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 1500);
+//HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, 0);
+	 //   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 1200);
 
 
 	   }
-else
-	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10, 0);
-	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, 1);
+else if (  (TIM2->CNT ) <( receptor.pos  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1500);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); //cambiarlo por salidas analogcas  PWM
+}
+val = servo+50;
+//if ( servo == 97)
+__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1,val);
+
+//if(servo == 104)
+//	__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1,50);
+
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -321,6 +261,56 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -414,10 +404,51 @@ static void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
   HAL_TIM_MspPostInit(&htim4);
+
+}
+
+/**
+  * @brief UART5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_UART5_Init(void)
+{
+
+  /* USER CODE BEGIN UART5_Init 0 */
+
+  /* USER CODE END UART5_Init 0 */
+
+  /* USER CODE BEGIN UART5_Init 1 */
+
+  /* USER CODE END UART5_Init 1 */
+  huart5.Instance = UART5;
+  huart5.Init.BaudRate = 115200;
+  huart5.Init.WordLength = UART_WORDLENGTH_8B;
+  huart5.Init.StopBits = UART_STOPBITS_1;
+  huart5.Init.Parity = UART_PARITY_NONE;
+  huart5.Init.Mode = UART_MODE_TX_RX;
+  huart5.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart5.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN UART5_Init 2 */
+
+  /* USER CODE END UART5_Init 2 */
 
 }
 
