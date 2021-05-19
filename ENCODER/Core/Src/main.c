@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,6 +68,9 @@ static void MX_UART5_Init(void);
 int ADC_val;
 uint8_t servo;
 int val;
+int encoder;
+int final_carrera;
+
 
 #define TAMBUFFER 12
 
@@ -81,8 +84,35 @@ uint8_t* pointer;
 uint8_t buffer[10];  //es el bufer de lectura , espacio == 32
 //uint8_t *buff_pointer; // recorre el buffer
 
-
+int prueba;
 buff receptor;
+
+//varaibles PID
+int error;
+float integrador_prev;
+float derivador_prev;
+float a = 0.3;//0.3
+float b = 1;//0.1
+float c = 0.0002;
+float dt;
+float current_time;
+//función PID
+
+
+
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4)){
+final_carrera = 1;
+	 __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+	 __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
+	}
+	else{
+		final_carrera = 0;
+	}
+
+}
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
@@ -91,6 +121,7 @@ if (receptor.selector == 'a'){
 	 HAL_UART_Receive_IT(&huart5, receptor.buffer,  4* sizeof(uint8_t ));
 	 //enviar como ASCI para ganar resolucion y luego convertir
 	 receptor.selector = 0;
+	 prueba =1;
 }
 
 if(receptor.selector == 's'){
@@ -113,6 +144,20 @@ else HAL_UART_Receive_IT(&huart5, &receptor.selector,  sizeof(uint8_t ));
  // o hacr una struct que tenga un numero con la posicion y operar con ese num .
 // lee mal al principio , hay que tmetelre un epacio y lo hce 2veces(inicilaizacion en non blocking?)
   // el segundo caracter no envia bien -> so  se muevee bien en memoria? se salta la pos 2 .
+int PID (int consigna, int lectura){
+	int salida;
+
+
+float integrador,derivador;
+	error = consigna-lectura;
+	integrador += dt*error;
+	derivador  = c*error + derivador_prev;
+	salida = a*error +b*integrador;//r +  derivador;
+	integrador_prev = integrador;
+	derivador_prev = derivador;
+	current_time = HAL_GetTick();
+return salida;
+}
 
 /* USER CODE END 0 */
 
@@ -150,7 +195,7 @@ int main(void)
   MX_UART5_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
@@ -165,10 +210,25 @@ receptor.pos = 0;
   }
 
   HAL_UART_Receive_IT(&huart5, &receptor.selector, sizeof(uint8_t ));
-
+//fer chupame los hevos
   receptor.pos = 0;
+//reubicar el motro hasta el punto 0
+//  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+  final_carrera = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
+  do{
 
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,400);
+  }while(final_carrera == 0);
 
+  //una vez encontrado el 0, reinicializar todo y avanzar n poco el motor para no llegar al 0
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 100);
+  HAL_Delay(200);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
+  HAL_Delay(100);
+  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL); //puedo iniciar el temprizaodr despues y asi no hace falta reiniciarlo?
 
   /* USER CODE END 2 */
 
@@ -178,34 +238,48 @@ receptor.pos = 0;
   {
 
 
-
 	//procesar la info recibida
 
 receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
-if(  (TIM2->CNT ) >(receptor.pos ) ){
+//el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
+// quizás no usar directamente el valor del contador, sino una versión filtrada del mismo
+encoder =  TIM2->CNT;
+if(encoder > 5000) encoder = 0; // ha dado mas vuelta de la necesaria
 
+
+dt = HAL_GetTick()- current_time;
+if(dt >= 30){
+
+}
+if(  fabs(encoder-receptor.pos) < 10 ) prueba = 0;
+
+if(   prueba == 0){
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
+
+  }
+
+if(  (encoder ) >(receptor.pos ) && final_carrera == 0    ){
 /*
 );
 
 */
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 1500);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 500);
 //HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, 0);
 	 //   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 1200);
 
 
 	   }
-else if (  (TIM2->CNT ) <( receptor.pos  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1500);
+else if (  (encoder ) <( receptor.pos  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,500);//1000, aqui es sincrono
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); //cambiarlo por salidas analogcas  PWM
+
 }
 val = servo+50;
-//if ( servo == 97)
-__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1,val);
 
-//if(servo == 104)
-//	__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1,50);
+__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1,val);
 
   }
 
@@ -470,12 +544,22 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9|GPIO_PIN_10, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin : PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PD9 PD10 */
   GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
 }
 

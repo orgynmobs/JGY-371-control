@@ -54,8 +54,8 @@ all: main-build
 main-build: ENCODER.elf secondary-outputs
 
 # Tool invocations
-ENCODER.elf: $(OBJS) $(USER_OBJS) C:\Users\orgyn\Documents\uni\ 4ro\SED\CODES\ENCODER\STM32F407VGTX_FLASH.ld
-	arm-none-eabi-gcc -o "ENCODER.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\orgyn\Documents\uni 4ro\SED\CODES\ENCODER\STM32F407VGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="ENCODER.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+ENCODER.elf: $(OBJS) $(USER_OBJS) C:\Users\orgyn\Documents\TFG\github\JGY-371-control\ENCODER\STM32F407VGTX_FLASH.ld
+	arm-none-eabi-gcc -o "ENCODER.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\orgyn\Documents\TFG\github\JGY-371-control\ENCODER\STM32F407VGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="ENCODER.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
