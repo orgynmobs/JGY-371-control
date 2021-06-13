@@ -77,6 +77,7 @@ int final_carrera;
 typedef struct {
 uint8_t buffer[10];
 uint8_t selector;
+int coma;
 int pos;
 
 }buff;
@@ -89,15 +90,15 @@ buff receptor;
 
 //varaibles PID
 int error;
-float integrador_prev;
+float integrador_prev = 0 ;
 float derivador_prev;
-float a = 0.3;//0.3
-float b = 1;//0.1
+float a =3;//0.3
+float b = 0.01;//0.1
 float c = 0.0002;
 float dt;
 float current_time;
 //función PID
-
+int salida;
 
 
 
@@ -114,10 +115,13 @@ final_carrera = 1;
 
 }
 
+char buffe[4];
+int coma;
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 
-if (receptor.selector == 'a'){
+if (receptor.selector == 'M'){
 	 HAL_UART_Receive_IT(&huart5, receptor.buffer,  4* sizeof(uint8_t ));
 	 //enviar como ASCI para ganar resolucion y luego convertir
 	 receptor.selector = 0;
@@ -125,15 +129,16 @@ if (receptor.selector == 'a'){
 }
 
 if(receptor.selector == 's'){
-	HAL_UART_Receive_IT(&huart5, &servo,   sizeof(servo));
+	HAL_UART_Receive_IT(&huart5, (uint8_t*)buffe,   3*sizeof(servo));
 	receptor.selector = 0;
-
 }
+
 else HAL_UART_Receive_IT(&huart5, &receptor.selector,  sizeof(uint8_t ));
 
 //	 receptor.pos++;
  // receptor.buff_pointer =  &receptor.buffer[(receptor.pos)  % TAMBUFFER];
 
+//	HAL_UART_Receive_IT(&huart5, &buffe,  4* sizeof(char));
 }
 
 
@@ -146,16 +151,12 @@ else HAL_UART_Receive_IT(&huart5, &receptor.selector,  sizeof(uint8_t ));
   // el segundo caracter no envia bien -> so  se muevee bien en memoria? se salta la pos 2 .
 int PID (int consigna, int lectura){
 	int salida;
-
-
-float integrador,derivador;
+float integrador;
 	error = consigna-lectura;
-	integrador += dt*error;
-	derivador  = c*error + derivador_prev;
-	salida = a*error +b*integrador;//r +  derivador;
-	integrador_prev = integrador;
-	derivador_prev = derivador;
-	current_time = HAL_GetTick();
+ integrador = (b*error/0.00000001) + integrador_prev;
+	salida = a*error + integrador;//
+
+	integrador_prev= integrador;
 return salida;
 }
 
@@ -237,10 +238,40 @@ receptor.pos = 0;
   while (1)
   {
 
-
+int i;
 	//procesar la info recibida
+if(receptor.buffer[0] == '-'){
+	for( i= 0;i<4;i++){
+	if(receptor.buffer[i] == '.')
+		{
+		receptor.coma= i;
+		}
+	}
 
-receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
+	if(receptor.coma == 3)
+		receptor.pos = (receptor.buffer[1]-48)*100 + (receptor.buffer[2]-48)*10 ;
+	else
+		receptor.pos = (receptor.buffer[2]-48)  ;
+
+if(receptor.pos < 0) receptor.pos = 0;
+}
+
+if(receptor.buffer[0] != '-'){
+	for( i=0;i<4;i++){
+		if(receptor.buffer[i] == '.')
+			{
+			receptor.coma= i;
+			}
+		}
+	if(receptor.coma == 3)
+			receptor.pos = (receptor.buffer[0]-48)*10 + (receptor.buffer[1]-48) ;
+		else
+			receptor.pos = (receptor.buffer[0]-48)  ;
+
+
+}
+
+//receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
 //el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
 // quizás no usar directamente el valor del contador, sino una versión filtrada del mismo
@@ -248,36 +279,75 @@ encoder =  TIM2->CNT;
 if(encoder > 5000) encoder = 0; // ha dado mas vuelta de la necesaria
 
 
-dt = HAL_GetTick()- current_time;
-if(dt >= 30){
 
-}
-if(  fabs(encoder-receptor.pos) < 10 ) prueba = 0;
+
+
+
+
+/*if(  fabs(encoder-receptor.pos) < 10 ) prueba = 0;
 
 if(   prueba == 0){
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
 
   }
-
-if(  (encoder ) >(receptor.pos ) && final_carrera == 0    ){
-/*
-);
-
 */
+//dt = HAL_GetTick()-current_time;
+current_time = HAL_GetTick();
+//proportional
+if(  (encoder ) >(receptor.pos ) && final_carrera == 0    ){
+	dt = HAL_GetTick()- current_time;
+prueba = a*(encoder-receptor.pos);
+salida =PID(encoder,receptor.pos);
+	//prueba = receptor.pos - salida;
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 500);
-//HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, 0);
-	 //   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 1200);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, prueba); //prueba
 
 
 	   }
 else if (  (encoder ) <( receptor.pos  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,500);//1000, aqui es sincrono
+	dt = HAL_GetTick()- current_time;
+	salida =PID(receptor.pos, encoder);
+	prueba = a*(receptor.pos - encoder);
+
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,prueba);//1000, aqui es sincrono, PRUEBA
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); //cambiarlo por salidas analogcas  PWM
 
 }
-val = servo+50;
+
+//val = servo+50;
+//val = (buffe[0]-48)*100+ (buffe[1]-48)*10+ buffe[2]-48 - 30 ;
+if(buffe[0] == '-'){
+	for( i= 0;i<4;i++){
+	if(buffe[i] == '.')
+		{
+		coma= i;
+		}
+	}
+
+	if(coma == 3)
+		val = (buffe[1]-48)*100 + (buffe[2]-48)*10 ;
+	else
+		val = (buffe[2]-48)  ;
+
+	if(val < 0) val = 0;
+	}
+
+	if(buffe[0] != '-'){
+		for( i=0;i<4;i++){
+			if(buffe[i] == '.')
+				{
+				coma= i;
+				}
+			}
+		if(coma == 2)
+				val = (buffe[0]-48)*10 + (buffe[1]-48) ;
+			else
+				val = (buffe[0]-48)  ;
+
+
+	}
+val = val+50;
 
 __HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1,val);
 
@@ -509,7 +579,7 @@ static void MX_UART5_Init(void)
 
   /* USER CODE END UART5_Init 1 */
   huart5.Instance = UART5;
-  huart5.Init.BaudRate = 115200;
+  huart5.Init.BaudRate = 9600;
   huart5.Init.WordLength = UART_WORDLENGTH_8B;
   huart5.Init.StopBits = UART_STOPBITS_1;
   huart5.Init.Parity = UART_PARITY_NONE;
