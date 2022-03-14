@@ -74,8 +74,8 @@ uint8_t servo;
 int val;
 int encoder;
 int encoder2;
-int final_carrera;
-
+ int final_carrera;
+ int final_carrera_2;
 
 #define TAMBUFFER 12
 
@@ -134,6 +134,14 @@ final_carrera = 1;
 		final_carrera = 0;
 	}
 
+
+	if(HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_5)){
+	final_carrera_2 = 1;
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1,0);
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2,0);
+	}
+	else
+		final_carrera_2= 0;
 }
 
 char buffe[4];
@@ -155,6 +163,7 @@ if(receptor.selector == 's'){
 }
 
 if(receptor.selector == 'm'){
+
 	HAL_UART_Receive_IT(&huart5,(uint8_t*) motorcodo.buffer,   3*sizeof(char));
 	receptor.selector = 0;
 }
@@ -225,9 +234,14 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
+  //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
 
 
 
@@ -239,25 +253,61 @@ receptor.pos = 0;
   }
 
   HAL_UART_Receive_IT(&huart5, &receptor.selector, sizeof(uint8_t ));
- //fer chupame los hevos
+ //fer chupame los huevos
   receptor.pos = 0;
 //reubicar el motro hasta el punto 0
 //  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-  final_carrera = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
-  do{
 
+
+  //secuencia de arranque
+
+
+
+ HAL_Delay(100);
+
+  final_carrera = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
+  final_carrera_2 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5);
+  while (  ( (final_carrera_2 == 0) || (final_carrera == 0))   ){
+	  	  if(final_carrera == 0){
 	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,1800);
-  }while(final_carrera == 0);
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,400);
+	  	  }
+
+	  //test
+	  	  if (final_carrera_2 == 0){
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 400);
+	  	  }
+
+  }
 
   //una vez encontrado el 0, reinicializar todo y avanzar n poco el motor para no llegar al 0
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 100); //100
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 10); //100
+
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 10); //100
+
   HAL_Delay(200);
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
+
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); //100
   HAL_Delay(100);
+  HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL); //puedo iniciar el temprizaodr despues y asi no hace falta reiniciarlo?
+motorbase.valor = 0;
+motorcodo.valor= 0;
+
+
+
+
+
+
+//Pruebas
+
+
 
   /* USER CODE END 2 */
 
@@ -277,9 +327,9 @@ if(motorbase.buffer[0] == '-'){
 	}
 
 	if(motorbase.coma == 3)
-		motorbase.valor=( -1*(motorbase.buffer[1]-48)*10 + (motorbase.buffer[2]-48)*1) ;
+		motorbase.valor=( -2.3*(motorbase.buffer[1]-48)*10 + (motorbase.buffer[2]-48)) ;
 	else
-		motorbase.valor = -1* motorbase.buffer[2]-48  ;
+		motorbase.valor = -2.3* motorbase.buffer[2]-48  ;
 
 
 }
@@ -294,14 +344,15 @@ if(motorbase.buffer[0] != '-'){
 			}
 		}
 	if(motorbase.coma == 2)
-			motorbase.valor = ((motorbase.buffer[0]-48)*10 + (motorbase.buffer[1]-48)) ;
+			motorbase.valor =2.3* ((motorbase.buffer[0]-48)*10 + (motorbase.buffer[1]-48)) ;
 		else
-			motorbase.valor= (motorbase.buffer[0]-48)  ;
+			motorbase.valor= (motorbase.buffer[0]-48) *2.3 ;
 
 
 }
 
-motorbase.valor =440-  (motorbase.valor)*10;
+//motorbase.valor =440-  (motorbase.valor)*10;
+
 if(motorbase.valor<0) motorbase.valor =0;
 if(motorbase.valor>440) motorbase.valor =440;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
@@ -361,9 +412,9 @@ if(motorcodo.buffer[0] == '-'){
 	}
 
 	if(motorcodo.coma == 3)
-		motorcodo.valor=( -1*(motorcodo.buffer[1]-48)*10 + (motorcodo.buffer[2]-48)*1) ;
+		motorcodo.valor=( -2.3*(motorcodo.buffer[1]-48)*10 + (motorcodo.buffer[2]-48)) ;
 	else
-		motorcodo.valor = -1* motorcodo.buffer[2]-48  ;
+		motorcodo.valor = -2.3* motorcodo.buffer[2]-48  ;
 
 
 }
@@ -378,22 +429,24 @@ if(motorcodo.buffer[0] != '-'){
 			}
 		}
 	if(motorcodo.coma == 2)
-			motorcodo.valor = ((motorcodo.buffer[0]-48)*10 + (motorcodo.buffer[1]-48)) ;
+			motorcodo.valor = 10*((motorcodo.buffer[0]-48)*10 + (motorcodo.buffer[1]-48)) ;
 		else
-			motorcodo.valor= (motorcodo.buffer[0]-48)  ;
+			motorcodo.valor= 10*(motorcodo.buffer[0]-48)  ;
 
 
 }
 
-motorcodo.valor =440-  (motorcodo.valor)*10;
+//motorcodo.valor =440-  (motorcodo.valor)*10;
+
+
 if(motorcodo.valor<0) motorcodo.valor =0;
-if(motorcodo.valor>440) motorcodo.valor =440;
+//if(motorcodo.valor>650) motorcodo.valor =650;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
 //el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
 // quizás no usar directamente el valor del contador, sino una versión filtrada del mismo
-encoder2 =  TIM1->CNT;
-if(encoder > 5000) encoder2 = 0; // ha dado mas vuelta de la necesaria
+encoder2 =  TIM3->CNT;
+if(encoder2 > 5000) encoder2 = 0; // ha dado mas vuelta de la necesaria
 
 
 
@@ -412,13 +465,13 @@ if(   prueba == 0){
 //dt = HAL_GetTick()-current_time;
 current_time2 = HAL_GetTick();
 //proportional
-if(  (encoder2 ) >(motorcodo.valor )   ){
+if(  (encoder2 ) >(motorcodo.valor ) && final_carrera_2 == 0  ){
 	dt2 = HAL_GetTick()- current_time2;
 prueba2 = a*(encoder2-motorcodo.valor);
 salida2 =PID(encoder2,motorcodo.valor);
 	//prueba = receptor.pos - salida;2
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, prueba2); //prueba
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, prueba2); //prueba
 
 
 	   }
@@ -427,8 +480,8 @@ else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : 
 	salida2 =PID(motorcodo.valor, encoder2);
 	prueba2 = a*(motorcodo.valor - encoder2);
 
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1,prueba2);//1000, aqui es sincrono, PRUEBA
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0); //cambiarlo por salidas analogcas  PWM
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,prueba2);//1000, aqui es sincrono, PRUEBA
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); //cambiarlo por salidas analogcas  PWM
 
 }
 
@@ -450,7 +503,7 @@ if(servomotor.buffer[0] == '-'){
 	}
 
 	if(servomotor.coma == 3)
-		servomotor.valor = (-1)*(servomotor.buffer[1]-48)*100 + (servomotor.buffer[2]-48)*10 ;
+		servomotor.valor = (-1)*(servomotor.buffer[1]-48)*10 + (servomotor.buffer[2]-48)*10 ;
 	else
 		servomotor.valor = (-1)*((servomotor.buffer[2]-48)+  (servomotor.buffer[1]-48)*10) ;
 
@@ -474,7 +527,7 @@ if(servomotor.buffer[0] == '-'){
 servomotor.valor = (servomotor.valor+173)*3/4;
 if (servomotor.valor >250) servomotor.valor= 250;
 if (servomotor.valor <0) servomotor.valor= 0;
-__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1,servomotor.valor);
+__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,servomotor.valor);
 
   }
 
@@ -594,29 +647,21 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 0 */
 
-  TIM_Encoder_InitTypeDef sConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
+  htim1.Init.Prescaler = 720-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
+  htim1.Init.Period = 2000-1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
-  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 10;
-  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
-  if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -626,9 +671,32 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM1_Init 2 */
 
   /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
 
 }
 
@@ -693,19 +761,28 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 0 */
 
+  TIM_Encoder_InitTypeDef sConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM3_Init 1 */
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 720-1;
+  htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 2000-1;
+  htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim3, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -715,26 +792,9 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
-  HAL_TIM_MspPostInit(&htim3);
 
 }
 
@@ -785,6 +845,10 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -841,15 +905,14 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9|GPIO_PIN_10, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  /*Configure GPIO pins : PA4 PA5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -864,6 +927,9 @@ static void MX_GPIO_Init(void)
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 
