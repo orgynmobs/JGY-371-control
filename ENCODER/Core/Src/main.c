@@ -147,6 +147,10 @@ final_carrera = 1;
 char buffe[4];
 int coma;
 
+int senalbase;
+int senalcodo;
+int senalservo;
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 
@@ -155,17 +159,20 @@ if (receptor.selector == 'M'){
 	 //enviar como ASCI para ganar resolucion y luego convertir
 	 receptor.selector = 0;
 	 prueba =1;
+	 senalbase =1;
 }
 
 if(receptor.selector == 's'){
 	HAL_UART_Receive_IT(&huart5,(uint8_t*) servomotor.buffer,   3*sizeof(char));
 	receptor.selector = 0;
+	senalservo = 1;
 }
 
 if(receptor.selector == 'm'){
 
-	HAL_UART_Receive_IT(&huart5,(uint8_t*) motorcodo.buffer,   3*sizeof(char));
+	HAL_UART_Receive_IT(&huart5,(uint8_t*) motorcodo.buffer,   4*sizeof(char));
 	receptor.selector = 0;
+	senalcodo = 1;
 }
 
 else HAL_UART_Receive_IT(&huart5, &receptor.selector,  sizeof(uint8_t ));
@@ -176,9 +183,21 @@ else HAL_UART_Receive_IT(&huart5, &receptor.selector,  sizeof(uint8_t ));
 //	HAL_UART_Receive_IT(&huart5, &buffe,  4* sizeof(char));
 }
 
+void resetBuffer(uint8_t* buffer){
+	  for(int i = 0; i<sizeof(buffer) ; i++){
+		  buffer[i] = '0';
+	  }
 
+}
 
 	//}
+
+
+
+
+
+
+
 
  // buscar como reiniciar el buffer cuando termine de leer ; hacer por ej buff_pointer- buff[0] % BUFFSIZE
  // o hacr una struct que tenga un numero con la posicion y operar con ese num .
@@ -248,9 +267,7 @@ int main(void)
 
   //inicializar el buffer
 receptor.pos = 0;
-  for(int i = 0; i<10 ; i++){
-	  receptor.buffer[i] = '0';
-  }
+resetBuffer(receptor.buffer);
 
   HAL_UART_Receive_IT(&huart5, &receptor.selector, sizeof(uint8_t ));
  //fer chupame los huevos
@@ -267,7 +284,7 @@ receptor.pos = 0;
 
   final_carrera = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
   final_carrera_2 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5);
-  while (  ( (final_carrera_2 == 0) || (final_carrera == 0))   ){
+  while (((final_carrera_2 == 0) || (final_carrera == 0))){
 	  	  if(final_carrera == 0){
 	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
 	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,400);
@@ -317,6 +334,8 @@ motorcodo.valor= 0;
   {
 
 int i;
+
+ if(senalbase == 1){
 	//procesar la info recibida
 if(motorbase.buffer[0] == '-'){
 	for( i= 0;i<4;i++){
@@ -350,7 +369,8 @@ if(motorbase.buffer[0] != '-'){
 
 
 }
-
+senalbase =0;
+ }
 //motorbase.valor =440-  (motorbase.valor)*10;
 
 if(motorbase.valor<0) motorbase.valor =0;
@@ -403,6 +423,8 @@ else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [
 // MOTOR CODO SIN SENSOR DE CARRERA
 
 //procesar la info recibida
+
+if(senalcodo == 1){
 if(motorcodo.buffer[0] == '-'){
 	for( i= 0;i<4;i++){
 	if(motorcodo.buffer[i] == '.')
@@ -435,7 +457,8 @@ if(motorcodo.buffer[0] != '-'){
 
 
 }
-
+senalcodo = 0;
+}
 //motorcodo.valor =440-  (motorcodo.valor)*10;
 
 
@@ -493,6 +516,7 @@ else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : 
 
 //val = servo+50;
 //val = (buffe[0]-48)*100+ (buffe[1]-48)*10+ buffe[2]-48 - 30 ;
+if(senalservo == 1){
 if(servomotor.buffer[0] == '-'){
 	servomotor.coma=0;
 	for( i= 0;i<4;i++){
@@ -524,6 +548,8 @@ if(servomotor.buffer[0] == '-'){
 
 
 	}
+senalservo = 0;
+}
 servomotor.valor = (servomotor.valor+173)*3/4;
 if (servomotor.valor >250) servomotor.valor= 250;
 if (servomotor.valor <0) servomotor.valor= 0;
