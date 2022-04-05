@@ -266,12 +266,12 @@ int main(void)
   //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
   //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
 
-__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,2000);
+/*__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,2000);
 __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3,2000);
 __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4,2000);
 __HAL_TIM_SET_COMPARE(&htim5,TIM_CHANNEL_3,2000);
 __HAL_TIM_SET_COMPARE(&htim5,TIM_CHANNEL_4,2000);
-
+*/
 
   //inicializar el buffer
 receptor.pos = 0;
@@ -324,6 +324,7 @@ resetBuffer(receptor.buffer);
   HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL); //puedo iniciar el temprizaodr despues y asi no hace falta reiniciarlo?
 motorbase.valor = 0;
 motorcodo.valor= 0;
+servomotor.valor =0;
 
 
 
@@ -343,7 +344,7 @@ motorcodo.valor= 0;
 
 int i;
 
- if(senalbase == 1){
+
 	//procesar la info recibida
 if(motorbase.buffer[0] == '-'){
 	for( i= 0;i<4;i++){
@@ -354,9 +355,9 @@ if(motorbase.buffer[0] == '-'){
 	}
 
 	if(motorbase.coma == 3)
-		motorbase.valor=( -2.3*(motorbase.buffer[1]-48)*10 + (motorbase.buffer[2]-48)) ;
+		motorbase.valor=((-1)+ (motorbase.buffer[1]-48)*10 + (motorbase.buffer[2]-48)) ;
 	else
-		motorbase.valor = -2.3* motorbase.buffer[2]-48  ;
+		motorbase.valor = (-1)*( motorbase.buffer[2]-48) ;
 
 
 }
@@ -371,18 +372,18 @@ if(motorbase.buffer[0] != '-'){
 			}
 		}
 	if(motorbase.coma == 2)
-			motorbase.valor =2.3* ((motorbase.buffer[0]-48)*10 + (motorbase.buffer[1]-48)) ;
+			motorbase.valor = ((motorbase.buffer[0]-48)*10 + (motorbase.buffer[1]-48)) ;
 		else
-			motorbase.valor= (motorbase.buffer[0]-48) *2.3 ;
+			motorbase.valor= (motorbase.buffer[0]-48)  ;
 
 
 }
 senalbase =0;
- }
-//motorbase.valor =440-  (motorbase.valor)*10;
 
+//motorbase.valor =440-  (motorbase.valor)*10;
+motorbase.valor = (-2)* motorbase.valor +150;
 if(motorbase.valor<0) motorbase.valor =0;
-if(motorbase.valor>440) motorbase.valor =440;
+if(motorbase.valor>300) motorbase.valor =300;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
 //el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
@@ -405,8 +406,15 @@ if(   prueba == 0){
   }
 */
 //dt = HAL_GetTick()-current_time;
+//motorbase.valor = 300;
 current_time = HAL_GetTick();
 //proportional
+if (motorbase.valor > 240) motorbase.valor = 240;
+if (motorbase.valor < 0) motorbase.valor = 0;
+
+
+
+
 if(  (encoder ) >(motorbase.valor ) && final_carrera == 0    ){
 	dt = HAL_GetTick()- current_time;
 prueba = a*(encoder-motorbase.valor);
@@ -432,7 +440,7 @@ else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [
 
 //procesar la info recibida
 
-if(senalcodo == 1){
+
 if(motorcodo.buffer[0] == '-'){
 	for( i= 0;i<4;i++){
 	if(motorcodo.buffer[i] == '.')
@@ -442,9 +450,9 @@ if(motorcodo.buffer[0] == '-'){
 	}
 
 	if(motorcodo.coma == 3)
-		motorcodo.valor=( -2.3*(motorcodo.buffer[1]-48)*10 + (motorcodo.buffer[2]-48)) ;
+		motorcodo.valor=(-1)*( (motorcodo.buffer[1]-48)*10 + (motorcodo.buffer[2]-48)) ;
 	else
-		motorcodo.valor = -2.3* motorcodo.buffer[2]-48  ;
+		motorcodo.valor =  (-1)*motorcodo.buffer[2]-48 ;
 
 
 }
@@ -459,18 +467,19 @@ if(motorcodo.buffer[0] != '-'){
 			}
 		}
 	if(motorcodo.coma == 2)
-			motorcodo.valor = 10*((motorcodo.buffer[0]-48)*10 + (motorcodo.buffer[1]-48)) ;
+			motorcodo.valor = ((motorcodo.buffer[0]-48)*10 + (motorcodo.buffer[1]-48))  ;
 		else
-			motorcodo.valor= 10*(motorcodo.buffer[0]-48)  ;
+			motorcodo.valor= (motorcodo.buffer[0]-48)   ;
 
 
 }
-senalcodo = 0;
-}
+
+
 //motorcodo.valor =440-  (motorcodo.valor)*10;
 
-
+motorcodo.valor = -4*motorcodo.valor + 300;
 if(motorcodo.valor<0) motorcodo.valor =0;
+
 //if(motorcodo.valor>650) motorcodo.valor =650;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
@@ -494,8 +503,13 @@ if(   prueba == 0){
   }
 */
 //dt = HAL_GetTick()-current_time;
+//motorcodo.valor = 100;
 current_time2 = HAL_GetTick();
 //proportional
+
+
+
+
 if(  (encoder2 ) >(motorcodo.valor ) && final_carrera_2 == 0  ){
 	dt2 = HAL_GetTick()- current_time2;
 prueba2 = a*(encoder2-motorcodo.valor);
@@ -524,7 +538,7 @@ else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : 
 
 //val = servo+50;
 //val = (buffe[0]-48)*100+ (buffe[1]-48)*10+ buffe[2]-48 - 30 ;
-if(senalservo == 1){
+
 if(servomotor.buffer[0] == '-'){
 	servomotor.coma=0;
 	for( i= 0;i<4;i++){
@@ -535,9 +549,9 @@ if(servomotor.buffer[0] == '-'){
 	}
 
 	if(servomotor.coma == 3)
-		servomotor.valor = (-1)*(servomotor.buffer[1]-48)*10 + (servomotor.buffer[2]-48)*10 ;
+		servomotor.valor = (-1)*(servomotor.buffer[1]-48)*10 ;
 	else
-		servomotor.valor = (-1)*((servomotor.buffer[2]-48)+  (servomotor.buffer[1]-48)*10) ;
+		servomotor.valor =(-1)* (servomotor.buffer[2]-48) ;
 
 
 	}
@@ -550,15 +564,16 @@ if(servomotor.buffer[0] == '-'){
 				}
 			}
 		if(servomotor.coma == 2)
-				servomotor.valor = (servomotor.buffer[0]-48)*10 + (servomotor.buffer[1]-48) ;
+				servomotor.valor = (servomotor.buffer[0]-48)*10 ;
 			else
 				servomotor.valor = (servomotor.buffer[0]-48);
 
 
-	}
+
 senalservo = 0;
 }
-servomotor.valor = (servomotor.valor+173)*3/4;
+servomotor.valor = servomotor.valor*0.5 + 150;
+servomotor.valor = 120;
 if (servomotor.valor >250) servomotor.valor= 250;
 if (servomotor.valor <0) servomotor.valor= 0;
 __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,servomotor.valor);
