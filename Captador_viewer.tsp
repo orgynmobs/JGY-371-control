@@ -1,5 +1,5 @@
 #STM Studio project file - do not edit
-#Tue Apr 05 11:43:22 CEST 2022
+#Sat Apr 09 22:12:35 CEST 2022
 Main.Version=1
 Root.Child0.IsActive=true
 Root.Child0.Name=captador_Viewer

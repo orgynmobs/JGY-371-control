@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <math.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -103,14 +104,18 @@ Lector servomotor;
 Lector motorbase;
 Lector motorcodo;
 
-
+//SERVOMOTOR
+float Delta_time;
+int step;
+int error_servo;
 
 //varaibles PID
 int error;
-float integrador_prev = 0 ;
+float proporcional;
+float integrador = 0;
 float derivador_prev;
 float a =3;//0.3
-float b = 0.01;//0.1
+float b = 0.001;//0.1
 float c = 0.0002;
 float dt;
 float dt2;
@@ -162,7 +167,7 @@ if (receptor.selector == 'M'){
 }
 
 if(receptor.selector == 's'){
-	HAL_UART_Receive_IT(&huart5,(uint8_t*) servomotor.buffer,   3*sizeof(char));
+	HAL_UART_Receive_IT(&huart5,(uint8_t*) servomotor.buffer,   4*sizeof(char));
 	receptor.selector = 0;
 	senalservo = 1;
 }
@@ -191,12 +196,44 @@ void resetBuffer(uint8_t* buffer){
 
 	//}
 
+int CaclValue(Lector motor){
+	int i,value;
+	if(motor.buffer[0] == '-'){
+		for( i= 0;i<4;i++){
+		if(motor.buffer[i] == '.')
+			{
+			motor.coma= i;
+			}
+		}
+
+		if(motor.coma == 3)
+			value= (-1)*((motor.buffer[1]-48)*10 + (motor.buffer[2]-48)) ;
+
+		else
+			value = (-1)*( motor.buffer[1]-48) ;
 
 
+	}
+
+	if(motor.buffer[0] != '-'){
+		motor.coma = 0;
+		for( i=0;i<4;i++){
+
+			if(motor.buffer[i] == '.')
+				{
+				motor.coma= i;
+				}
+			}
+		if(motor.coma == 2)
+				value = ((motor.buffer[0]-48)*10 + (motor.buffer[1]-48)) ;
+
+			else
+				value= (motor.buffer[0]-48)  ;
 
 
-
-
+	}
+	return value;
+}
 
  // buscar como reiniciar el buffer cuando termine de leer ; hacer por ej buff_pointer- buff[0] % BUFFSIZE
  // o hacr una struct que tenga un numero con la posicion y operar con ese num .
@@ -204,14 +241,34 @@ void resetBuffer(uint8_t* buffer){
   // el segundo caracter no envia bien -> so  se muevee bien en memoria? se salta la pos 2 .
 int PID (int consigna, int lectura){
 	int salida;
-float integrador;
+    float integrador;
 	error = consigna-lectura;
- integrador = (b*error/0.00000001) + integrador_prev;
-	salida = a*error + integrador;//
-
-	integrador_prev= integrador;
+	proporcional = dt*a*error;
+    integrador += (b*error);
+	salida = proporcional + integrador;
 return salida;
 }
+
+ //Implementacion de modelo cinemático inverso
+ // INPUT : x,yz . VALUE = L1,L2
+  float x_c;
+  float y_c;
+  float z_c;
+  float L1 = 27,L2 = 17;
+  double a_c;
+double r;
+ void inverseKinematic(float x,float y,float z){
+
+	  float r = sqrt((x*x) + (y*y));
+	  float a = sqrt((r*r) + (z*z));
+	 x_c = atan(y/x);
+	y_c =  acos((  pow(a,2) -(pow(L1,2)) - (pow(L2,2))  ) / (2*L1*L2)  );
+	 z_c = atan(z/r) - acos( ((pow(a,2)) + (pow(L1,2)) - (pow(L2,2))     )   /(2*L1*a) );
+
+
+ }
+
+
 
 /* USER CODE END 0 */
 
@@ -285,8 +342,9 @@ resetBuffer(receptor.buffer);
 
 
   //secuencia de arranque
-
-
+integrador =0;
+step = 100;
+inverseKinematic(40.62,-13.91,9.60);
 
  HAL_Delay(100);
 
@@ -342,48 +400,16 @@ servomotor.valor =0;
   while (1)
   {
 
-int i;
+
 
 
 	//procesar la info recibida
-if(motorbase.buffer[0] == '-'){
-	for( i= 0;i<4;i++){
-	if(motorbase.buffer[i] == '.')
-		{
-		motorbase.coma= i;
-		}
-	}
 
-	if(motorbase.coma == 3)
-		motorbase.valor=((-1)+ (motorbase.buffer[1]-48)*10 + (motorbase.buffer[2]-48)) ;
-	else
-		motorbase.valor = (-1)*( motorbase.buffer[2]-48) ;
-
-
-}
-
-if(motorbase.buffer[0] != '-'){
-	motorbase.coma = 0;
-	for( i=0;i<4;i++){
-
-		if(motorbase.buffer[i] == '.')
-			{
-			motorbase.coma= i;
-			}
-		}
-	if(motorbase.coma == 2)
-			motorbase.valor = ((motorbase.buffer[0]-48)*10 + (motorbase.buffer[1]-48)) ;
-		else
-			motorbase.valor= (motorbase.buffer[0]-48)  ;
-
-
-}
-senalbase =0;
 
 //motorbase.valor =440-  (motorbase.valor)*10;
-motorbase.valor = (-2)* motorbase.valor +150;
+motorbase.valor = (-2)* CaclValue(motorbase) +150;
 if(motorbase.valor<0) motorbase.valor =0;
-if(motorbase.valor>300) motorbase.valor =300;
+if (motorbase.valor > 240) motorbase.valor = 240;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
 //el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
@@ -409,16 +435,12 @@ if(   prueba == 0){
 //motorbase.valor = 300;
 current_time = HAL_GetTick();
 //proportional
-if (motorbase.valor > 240) motorbase.valor = 240;
-if (motorbase.valor < 0) motorbase.valor = 0;
-
-
-
+salida =PID(encoder,motorbase.valor);
 
 if(  (encoder ) >(motorbase.valor ) && final_carrera == 0    ){
 	dt = HAL_GetTick()- current_time;
 prueba = a*(encoder-motorbase.valor);
-salida =PID(encoder,motorbase.valor);
+
 	//prueba = receptor.pos - salida;
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, prueba); //prueba
@@ -427,7 +449,7 @@ salida =PID(encoder,motorbase.valor);
 	   }
 else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
 	dt = HAL_GetTick()- current_time;
-	salida =PID(motorbase.valor, encoder);
+//	salida =PID(motorbase.valor, encoder);
 	prueba = a*(motorbase.valor - encoder);
 
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,prueba);//1000, aqui es sincrono, PRUEBA
@@ -441,45 +463,13 @@ else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [
 //procesar la info recibida
 
 
-if(motorcodo.buffer[0] == '-'){
-	for( i= 0;i<4;i++){
-	if(motorcodo.buffer[i] == '.')
-		{
-		motorcodo.coma= i;
-		}
-	}
-
-	if(motorcodo.coma == 3)
-		motorcodo.valor=(-1)*( (motorcodo.buffer[1]-48)*10 + (motorcodo.buffer[2]-48)) ;
-	else
-		motorcodo.valor =  (-1)*motorcodo.buffer[2]-48 ;
-
-
-}
-
-if(motorcodo.buffer[0] != '-'){
-	motorcodo.coma = 0;
-	for( i=0;i<4;i++){
-
-		if(motorcodo.buffer[i] == '.')
-			{
-			motorcodo.coma= i;
-			}
-		}
-	if(motorcodo.coma == 2)
-			motorcodo.valor = ((motorcodo.buffer[0]-48)*10 + (motorcodo.buffer[1]-48))  ;
-		else
-			motorcodo.valor= (motorcodo.buffer[0]-48)   ;
-
-
-}
 
 
 //motorcodo.valor =440-  (motorcodo.valor)*10;
 
-motorcodo.valor = -4*motorcodo.valor + 300;
+motorcodo.valor = -13*CaclValue(motorcodo) + 975; // 4  300
 if(motorcodo.valor<0) motorcodo.valor =0;
-
+if(motorcodo.valor>2000) motorcodo.valor =2000;
 //if(motorcodo.valor>650) motorcodo.valor =650;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
@@ -539,44 +529,23 @@ else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : 
 //val = servo+50;
 //val = (buffe[0]-48)*100+ (buffe[1]-48)*10+ buffe[2]-48 - 30 ;
 
-if(servomotor.buffer[0] == '-'){
-	servomotor.coma=0;
-	for( i= 0;i<4;i++){
-	if(servomotor.buffer[i] == '.')
-		{
-		servomotor.coma= i;
-		}
-	}
 
-	if(servomotor.coma == 3)
-		servomotor.valor = (-1)*(servomotor.buffer[1]-48)*10 ;
-	else
-		servomotor.valor =(-1)* (servomotor.buffer[2]-48) ;
+servomotor.valor = (CaclValue(servomotor)*0.5) + 150;
+//servomotor.valor = 120;
+if (servomotor.valor >200) servomotor.valor= 200;
+if (servomotor.valor <100) servomotor.valor= 100;
 
+//secuencia para eliminar el fecto del retaro para la señal
+if(HAL_GetTick() - Delta_time >10 ){
 
-	}
+	Delta_time = HAL_GetTick();
+	error_servo = servomotor.valor - step; // puede ser negativo
+	step = step + error_servo/8;
 
-	if(servomotor.buffer[0] != '-'){
-		for( i=0;i<4;i++){
-			if(servomotor.buffer[i] == '.')
-				{
-				servomotor.coma= i;
-				}
-			}
-		if(servomotor.coma == 2)
-				servomotor.valor = (servomotor.buffer[0]-48)*10 ;
-			else
-				servomotor.valor = (servomotor.buffer[0]-48);
-
-
-
-senalservo = 0;
 }
-servomotor.valor = servomotor.valor*0.5 + 150;
-servomotor.valor = 120;
-if (servomotor.valor >250) servomotor.valor= 250;
-if (servomotor.valor <0) servomotor.valor= 0;
-__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,servomotor.valor);
+
+
+__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,step);
 
   }
 

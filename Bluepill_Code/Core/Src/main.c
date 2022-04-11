@@ -33,6 +33,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+//DEFIINCIÓN DE LAS DIRECCIONES DE LOS REGISTROS DEL MPU6050
+
 #define MPU6050_ADDR 0xD0
 #define SMPLRT_DIV_REG 0x19
 #define GYRO_CONFIG_REG 0x1B
@@ -43,27 +46,56 @@
 #define PWR_MGMT_1_REG 0x6B
 #define WHO_AM_I_REG 0x75
 
-// Definición esttructuras del programa
 
-typedef struct {
-	float Gx;
-	float Gy;
-	float Gz;
-}Gyro;
+//DEFINICION CINEMATICA
+int L1 = 27;
+int L2 = 17;
+float X_c,Y_c,Z_c;
 
-typedef struct{
-	float Ax;
-	float Ay;
-	float Az;
-} Accel;
+//DEFINICIÓN DE ESCTRUCUTRAS DEL PROGRAMA
 
- typedef struct {
-	 int hi2c;
-	 Gyro MPUgyro;
-	 Accel MPUaccel;
-	 float offsetx;
-	 float offsetY;
-}MPU6050;
+//GIROSCOPIO
+	typedef struct {
+		float Gx;
+		float Gy;
+		float Gz;
+	}Gyro;
+
+//ACELERÓMETRO
+	typedef struct{
+		float Ax;
+		float Ay;
+		float Az;
+	} Accel;
+
+//MPU6050
+	typedef struct {
+		int hi2c;
+		Gyro MPUgyro;
+		Accel MPUaccel;
+		float offsetx;
+		float offsetY;
+		//kalman
+		float Q_angle;
+		float Q_bias;
+		float R_Measure;
+		float bias;
+		float angle;
+		float rate;
+		float P[2][2];
+
+	}MPU6050;
+
+	typedef struct{
+//		float Q_angle;
+//		float Q_bias;
+//		float R_Measure;
+//		float bias;
+//		float angle;
+//		float rate;
+//		float P[2][2];
+	}KalmanMPUaxis;
+
 
 /* USER CODE END PD */
 
@@ -82,38 +114,49 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-// definimos las dos variables usadas en main()
+//VARAIBLES A USAR EN main()
 
-MPU6050 mpu1,mpu2;
-float Z_correcto;
-
-//angulos reales MPU 1
-float gyro_y1,gyro_x1,gyro_z1;
-//angulos reales MPU 2
-float gyro_y2,gyro_x2,gyro_z2;
-//aceleraciones reales Mpu 1
-float accel_x1,accel_y1,accel_z1;
-//aceleraciones reales mpu 2
-float accel_x2,accel_y2,accel_z2;
-
-//salidas procesadas
-float angulo_y,angulo_x;
-float angulo_y2,angulo_x2;
-char palabra[32];
-char palabra2[32];
-char palabra3[32];
-char palabra4[32];
-char palabra5[32];
-char palabra6[32];
-
-//integradores
-uint32_t time;
-uint32_t dt;
+//MPU
+	MPU6050 mpu1,mpu2;
+float test1;
 
 
-//kalman unidimensional
-int X, X_estimate;
-float ADC_val;
+//VARIABLE AUXILIAR PARA LA LECTURA DEL ANGULO DE GIRO
+	float Z_correcto;
+
+//LECTURAS DE GIROSCOPIO MPU1
+	float gyro_y1,gyro_x1,gyro_z1;
+//LECTURA DE GIROSCOPIO MPU2
+	float gyro_y2,gyro_x2,gyro_z2;
+//LECTURA ACELERÓMETRO MPU1
+	float accel_x1,accel_y1,accel_z1;
+//LECTURA ACELERÓMETRO MPU2
+	float accel_x2,accel_y2,accel_z2;
+
+//SALIDAS PROCESADAS
+	float angulo_y,angulo_x;
+	float angulo_y2,angulo_x2;
+	char palabra[32];
+	char palabra2[32];
+	char palabra3[32];
+	char palabra4[32];
+	char palabra5[32];
+	char palabra6[32];
+
+//VARIABLES DE TIEMPO
+	uint32_t time;
+	uint32_t dt;
+	uint32_t trans_time;
+
+//VARIABLES DE KALMAN UNIDIMENSIONAL
+	int X, X_estimate; // x : valor de estado, X_stimate : estimación del estado
+	float ADC_val;    // lectura del sensor
+
+
+
+//FILTROS DE KALMAN
+
+
 
 
 //kalman comunes para MPU
@@ -152,6 +195,13 @@ float angle5 = 0;
 float rate5 = 0;
 float P5[2][2];
 float KalmanAngle5;
+
+//test kalman
+float bias6= 0;
+float angle6 = 0;
+float rate6 = 0;
+float P6[2][2];
+float KalmanAngle6;
 
 
 /* USER CODE END PV */
@@ -271,6 +321,77 @@ Gyro MPU6050_Read_Gyro (int selector)
 
 return lectura;
 }
+
+
+//FUNCIONES PARA EL FILTRO DE KALMAN
+
+
+
+
+
+
+
+
+
+float KalmanFUN(float newAngle, float newRate,float angle, float bias, float dt,float P[2][2] ){  //1 x, 2 y , 3 z
+
+	float Plocal[2][2];
+
+
+		for(int i = 0; i<2;i++){
+			for(int j=0;j<2;j++){
+				Plocal[i][j]=P[i][j];
+			}
+		}
+
+
+	//1
+	rate = newRate - bias;
+    angle += dt * rate;
+	//2
+    	P[0][0] += dt * (dt*P[1][1] - P[0][1] - P[1][0] + Q_angle);
+    	P[0][1] -= dt * P[1][1];
+    	P[1][0] -= dt * P[1][1];
+    	P[1][1] += Q_bias * dt;
+	 //3
+    	float S = P[0][0] + R_measure; // Estimate error
+    	float K[2]; // Kalman gain - This is a 2x1 vector
+    	K[0] = P[0][0] / S;
+    	K[1] = P[1][0] / S;
+     //4
+    	float y = newAngle - angle;
+        angle += K[0] * y;
+        bias += K[1] * y;
+     //5
+         float P00_temp = P[0][0];
+         float P01_temp = P[0][1];
+
+         P[0][0] -= K[0] * P00_temp;
+         P[0][1] -= K[0] * P01_temp;
+         P[1][0] -= K[1] * P00_temp;
+         P[1][1] -= K[1] * P01_temp;
+
+
+
+
+
+     		for(int i = 0; i<2;i++){
+     			for(int j=0;j<2;j++){
+     				P[i][j]=Plocal[i][j];
+     			}
+
+     	}
+
+
+
+return angle;
+
+}
+
+
+
+
+
 
 
 float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis){  //1 x, 2 y , 3 z
@@ -418,6 +539,13 @@ int main(void)
   mpu2.offsetY =  -3; //2,48  -3
   mpu2.offsetx = -0.57;  //0.57    0
 KalmanAngle5=0;
+trans_time = 0;
+
+
+//ampliacion de struct
+mpu1.Q_angle = 0.001;
+mpu1.Q_bias = 0.003;
+mpu1.R_Measure = 0.03;
 
   //valores stadisticos
   	float desv_tipica = 2.0231;
@@ -445,6 +573,7 @@ int start = 0;
 while (start != 1){
 start =	  MPU6050_Init(hi2c1);
 start =	 	 MPU6050_Init(hi2c2);
+
 HAL_Delay(500);
 }
 	 	  // read the Accelerometer and Gyro values and tranform into angles
@@ -479,13 +608,20 @@ HAL_Delay(500);
 
 
 
-	 angulo_y = 0.01*(accel_y1) + 0.9*gyro_y1;
+	// angulo_y = 0.01*(accel_y1) + 0.9*gyro_y1;
 	 angulo_x = 0.01*(accel_x1) + 0.9*gyro_x1;
 
-	 KalmanAngle1 = KalmanMPU(accel_x1, mpu1.MPUgyro.Gx, dt,mpu1.hi2c,1); //1 x, 2y , 3z
+
+
+	KalmanAngle1 = KalmanMPU(accel_x1, mpu1.MPUgyro.Gx, dt,mpu1.hi2c,1); //1 x, 2y , 3z
 	 KalmanAngle2 = KalmanMPU(accel_x2, mpu2.MPUgyro.Gx, dt,mpu2.hi2c,1);
 	 KalmanAngle3 = KalmanMPU(accel_y1, mpu1.MPUgyro.Gy, dt,mpu1.hi2c,2);
 	 KalmanAngle4 = KalmanMPU(accel_y2, mpu2.MPUgyro.Gy, dt,mpu2.hi2c,2);
+
+	 //KalmanAngle6 =  KalmanFUN(accel_x1, mpu1.MPUgyro.Gx,KalmanAngle6,bias6, dt, P6 );
+
+//NUEVAS FUNCIONES
+
 
 	 angulo_y2 = 0.01*(accel_y2) + 0.9*gyro_y2;
 	 angulo_x2 = 0.01*(accel_x2) + 0.9*gyro_x2;
@@ -493,6 +629,9 @@ HAL_Delay(500);
 Z_correcto = mpu1.MPUgyro.Gz -2.3;
 if( abs(Z_correcto) < 2) Z_correcto = 0;
 KalmanAngle5 += dt*Z_correcto/1000;
+
+if(KalmanAngle5 > 90) KalmanAngle5 = 90;
+if(KalmanAngle5 < -90) KalmanAngle5 = -90;
 	 //ADC read
 
 	 P_previa =  P;
@@ -541,13 +680,25 @@ KalmanAngle5 += dt*Z_correcto/1000;
 
 
 
+	 		 	  //MODELO CINEMATICO
+
+	 		 	   X_c = cos(KalmanAngle5*(3.14/180)) * (L1*cos(KalmanAngle4*(3.14/180)) + L2*cos(KalmanAngle4*(3.14/180)+ KalmanAngle1*(3.14/180))   );
+	 		 	   Y_c = sin(KalmanAngle5*(3.14/180)) * (L1*cos(KalmanAngle4*(3.14/180)) + L2*cos(KalmanAngle4*(3.14/180)+ KalmanAngle1*(3.14/180))   );
+	 		 	   Z_c = (L1*sin(KalmanAngle4*(3.14/180))) + (L2*sin(KalmanAngle4*(3.14/180)+ KalmanAngle1*(3.14/180)));
+
+	 		 	if( HAL_GetTick() -trans_time > 50){
+
 	    HAL_UART_Transmit(&huart1, (uint8_t*)eMe, sizeof(char), 100);
 		HAL_UART_Transmit(&huart1,(uint8_t*)palabra5,sizeof(float ), 100);//palabra
 		HAL_UART_Transmit(&huart1, (uint8_t*)ese, sizeof(char), 100);
 		HAL_UART_Transmit(&huart1,(uint8_t*)palabra6,sizeof(float ), 100);
 		HAL_UART_Transmit(&huart1, (uint8_t*)eme, sizeof(char), 100);
 		HAL_UART_Transmit(&huart1,(uint8_t*)palabra2,sizeof(float ), 100);
+		  HAL_UART_Transmit(&huart1, (uint8_t*)ln, sizeof(comma), 100);
 
+				trans_time = HAL_GetTick();
+
+	 		 	}
 
 			//2nda etapa
 
@@ -558,7 +709,7 @@ KalmanAngle5 += dt*Z_correcto/1000;
 				//	HAL_UART_Transmit(&huart1, (uint8_t*)eSe, sizeof(char), 100);
 				//						HAL_UART_Transmit(&huart1,(uint8_t*)palabra6,sizeof(float ), 100);
 
-		  HAL_UART_Transmit(&huart1, (uint8_t*)ln, sizeof(comma), 100);
+
 
     /* USER CODE END WHILE */
 
