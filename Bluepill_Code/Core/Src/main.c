@@ -333,60 +333,6 @@ return lectura;
 
 
 
-float KalmanFUN(float newAngle, float newRate,float angle, float bias, float dt,float P[2][2] ){  //1 x, 2 y , 3 z
-
-	float Plocal[2][2];
-
-
-		for(int i = 0; i<2;i++){
-			for(int j=0;j<2;j++){
-				Plocal[i][j]=P[i][j];
-			}
-		}
-
-
-	//1
-	rate = newRate - bias;
-    angle += dt * rate;
-	//2
-    	P[0][0] += dt * (dt*P[1][1] - P[0][1] - P[1][0] + Q_angle);
-    	P[0][1] -= dt * P[1][1];
-    	P[1][0] -= dt * P[1][1];
-    	P[1][1] += Q_bias * dt;
-	 //3
-    	float S = P[0][0] + R_measure; // Estimate error
-    	float K[2]; // Kalman gain - This is a 2x1 vector
-    	K[0] = P[0][0] / S;
-    	K[1] = P[1][0] / S;
-     //4
-    	float y = newAngle - angle;
-        angle += K[0] * y;
-        bias += K[1] * y;
-     //5
-         float P00_temp = P[0][0];
-         float P01_temp = P[0][1];
-
-         P[0][0] -= K[0] * P00_temp;
-         P[0][1] -= K[0] * P01_temp;
-         P[1][0] -= K[1] * P00_temp;
-         P[1][1] -= K[1] * P01_temp;
-
-
-
-
-
-     		for(int i = 0; i<2;i++){
-     			for(int j=0;j<2;j++){
-     				P[i][j]=Plocal[i][j];
-     			}
-
-     	}
-
-
-
-return angle;
-
-}
 
 
 
@@ -396,8 +342,15 @@ return angle;
 
 float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis){  //1 x, 2 y , 3 z
 
+
+	float myrate;
+	float mybias;
+	float myangle;
 	float P[2][2];
 	if(identifier == 1 && axis == 1 ){
+		myrate = rate;
+		mybias = bias;
+		myangle= angle;
 		for(int i = 0; i<2;i++){
 			for(int j=0;j<2;j++){
 				P[i][j]=P1[i][j];
@@ -406,6 +359,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
 	}
 
 	if(identifier == 2 && axis ==1){
+		myrate = rate2;
+		mybias = bias2;
+		myangle= angle2;
 		for(int i = 0; i<2;i++){
 			for(int j=0;j<2;j++){
 				P[i][j]=P2[i][j];
@@ -414,6 +370,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
 	}
 
 	if(identifier == 1 && axis == 2){
+		myrate = rate3;
+		mybias = bias3;
+		myangle= angle3;
 		for(int i = 0; i<2;i++){
 			for(int j=0;j<2;j++){
 				P[i][j]=P3[i][j];
@@ -422,6 +381,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
 	}
 
 	if(identifier == 2 && axis==2){
+		myrate = rate4;
+		mybias = bias4;
+		myangle= angle4;
 		for(int i = 0; i<2;i++){
 			for(int j=0;j<2;j++){
 				P[i][j]=P4[i][j];
@@ -431,8 +393,8 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
 
 
 	//1
-	rate = newRate - bias;
-    angle += dt * rate;
+	myrate = newRate - mybias;
+    myangle += dt * myrate;
 	//2
     	P[0][0] += dt * (dt*P[1][1] - P[0][1] - P[1][0] + Q_angle);
     	P[0][1] -= dt * P[1][1];
@@ -444,9 +406,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
     	K[0] = P[0][0] / S;
     	K[1] = P[1][0] / S;
      //4
-    	float y = newAngle - angle;
-        angle += K[0] * y;
-        bias += K[1] * y;
+    	float y = newAngle - myangle;
+        myangle += K[0] * y;
+        mybias += K[1] * y;
      //5
          float P00_temp = P[0][0];
          float P01_temp = P[0][1];
@@ -458,6 +420,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
 
 
      	if(identifier == 1 && axis ==1){
+     		rate = myrate;
+     		bias = mybias;
+     		angle= myangle;
      		for(int i = 0; i<2;i++){
      			for(int j=0;j<2;j++){
      				P1[i][j]=P[i][j];
@@ -466,6 +431,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
      	}
 
      	if(identifier == 2  && axis ==1){
+     		rate2 = myrate;
+     		bias2 = mybias;
+     		angle2= myangle;
      		for(int i = 0; i<2;i++){
      			for(int j=0;j<2;j++){
      				P2[i][j]=P[i][j];
@@ -473,6 +441,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
      		}
      	}
      	if(identifier == 1  && axis ==2){
+     		rate3 = myrate;
+     		bias3 = mybias;
+     		angle3= myangle;
      		for(int i = 0; i<2;i++){
      			for(int j=0;j<2;j++){
      				P3[i][j]=P[i][j];
@@ -480,6 +451,9 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
      		}
      	}
      	if(identifier == 2  && axis ==2){
+     		rate4 = myrate;
+     		bias4 = mybias;
+     		angle4= myangle;
      		for(int i = 0; i<2;i++){
      			for(int j=0;j<2;j++){
      				P4[i][j]=P[i][j];
@@ -489,7 +463,7 @@ float KalmanMPU(float newAngle, float newRate, float dt,int identifier, int axis
 
 
 
-return angle;
+return myangle;
 
 }
 
