@@ -469,6 +469,68 @@ return myangle;
 
 
 
+
+//float test(float newAngle, float newRate, float dt,float myrate, float mybias,float myangle, MPU6050 mpu){
+//
+//
+//
+//	float P[2][2];
+//		for(int i = 0; i<2;i++){
+//			for(int j=0;j<2;j++){
+//				P[i][j]=mpu.P[i][j];  // se puede cambiar esto a punteros como el selector?
+//			}
+//		}
+//
+//
+//
+//	//1
+//	myrate = newRate - mybias;
+//    myangle += dt * myrate;
+//	//2
+//    	P[0][0] += dt * (dt*P[1][1] - P[0][1] - P[1][0] + Q_angle);
+//    	P[0][1] -= dt * P[1][1];
+//    	P[1][0] -= dt * P[1][1];
+//    	P[1][1] += Q_bias * dt;
+//	 //3
+//    	float S = P[0][0] + R_measure; // Estimate error
+//    	float K[2]; // Kalman gain - This is a 2x1 vector
+//    	K[0] = P[0][0] / S;
+//    	K[1] = P[1][0] / S;
+//     //4
+//    	float y = newAngle - myangle;
+//        myangle += K[0] * y;
+//        mybias += K[1] * y;
+//     //5
+//         float P00_temp = P[0][0];
+//         float P01_temp = P[0][1];
+//
+//         P[0][0] -= K[0] * P00_temp;
+//         P[0][1] -= K[0] * P01_temp;
+//         P[1][0] -= K[1] * P00_temp;
+//         P[1][1] -= K[1] * P01_temp;
+//
+//
+//
+//     		for(int i = 0; i<2;i++){
+//     			for(int j=0;j<2;j++){
+//     				mpu.P[i][j]=P[i][j];
+//     			}
+//     		}
+//
+//
+//
+//
+//return myangle;
+//
+//}
+
+
+
+
+
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -592,7 +654,9 @@ HAL_Delay(500);
 	 KalmanAngle3 = KalmanMPU(accel_y1, mpu1.MPUgyro.Gy, dt,mpu1.hi2c,2);
 	 KalmanAngle4 = KalmanMPU(accel_y2, mpu2.MPUgyro.Gy, dt,mpu2.hi2c,2);
 
-	 //KalmanAngle6 =  KalmanFUN(accel_x1, mpu1.MPUgyro.Gx,KalmanAngle6,bias6, dt, P6 );
+
+
+//	 KalmanAngle6 =  test(accel_x1, mpu1.MPUgyro.Gx, dt,rate6,bias6,angle6, mpu1 );
 
 //NUEVAS FUNCIONES
 
@@ -604,8 +668,8 @@ Z_correcto = mpu1.MPUgyro.Gz -2.3;
 if( abs(Z_correcto) < 2) Z_correcto = 0;
 KalmanAngle5 += dt*Z_correcto/1000;
 
-if(KalmanAngle5 > 90) KalmanAngle5 = 90;
-if(KalmanAngle5 < -90) KalmanAngle5 = -90;
+if(KalmanAngle5 > 90) KalmanAngle5 = 89.9;
+if(KalmanAngle5 < -90) KalmanAngle5 = -89.9;
 	 //ADC read
 
 	 P_previa =  P;
@@ -621,6 +685,7 @@ if(KalmanAngle5 < -90) KalmanAngle5 = -90;
 	 		 	  P = (1-Kalman)*P_previa + fabs(X - X_estimate)*0.01;
 	 		 	  X = X_estimate;
 	 		 	  X_estimate =(X_estimate)/10 -20;
+	 		 	 X_estimate =X_estimate +60;
 
 
 	 //UART
@@ -660,7 +725,7 @@ if(KalmanAngle5 < -90) KalmanAngle5 = -90;
 	 		 	   Y_c = sin(KalmanAngle5*(3.14/180)) * (L1*cos(KalmanAngle4*(3.14/180)) + L2*cos(KalmanAngle4*(3.14/180)+ KalmanAngle1*(3.14/180))   );
 	 		 	   Z_c = (L1*sin(KalmanAngle4*(3.14/180))) + (L2*sin(KalmanAngle4*(3.14/180)+ KalmanAngle1*(3.14/180)));
 
-	 		 	if( HAL_GetTick() -trans_time > 50){
+	 		 	if( HAL_GetTick() -trans_time > 10){
 
 	    HAL_UART_Transmit(&huart1, (uint8_t*)eMe, sizeof(char), 100);
 		HAL_UART_Transmit(&huart1,(uint8_t*)palabra5,sizeof(float ), 100);//palabra
@@ -668,6 +733,9 @@ if(KalmanAngle5 < -90) KalmanAngle5 = -90;
 		HAL_UART_Transmit(&huart1,(uint8_t*)palabra6,sizeof(float ), 100);
 		HAL_UART_Transmit(&huart1, (uint8_t*)eme, sizeof(char), 100);
 		HAL_UART_Transmit(&huart1,(uint8_t*)palabra2,sizeof(float ), 100);
+		HAL_UART_Transmit(&huart1, (uint8_t*)eSe, sizeof(char), 100);
+			HAL_UART_Transmit(&huart1,(uint8_t*)info_kalman,sizeof(float ), 100);
+
 		  HAL_UART_Transmit(&huart1, (uint8_t*)ln, sizeof(comma), 100);
 
 				trans_time = HAL_GetTick();

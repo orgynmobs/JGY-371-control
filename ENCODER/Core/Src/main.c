@@ -103,19 +103,23 @@ buff receptor;
 Lector servomotor;
 Lector motorbase;
 Lector motorcodo;
-
+Lector gripper;
 //SERVOMOTOR
 float Delta_time;
 int step;
 int error_servo;
 
 //varaibles PID
-int error;
+float error;
 float proporcional;
+float proporcional2;
 float integrador = 0;
+float integrador2 = 0;
 float derivador_prev;
-float a =3;//0.3
-float b = 0.001;//0.1
+float a =1;//3
+float a2 = 2;
+float b = 0.11;//0.1
+float b2 = 0.11;
 float c = 0.0002;
 float dt;
 float dt2;
@@ -178,6 +182,14 @@ if(receptor.selector == 'm'){
 	receptor.selector = 0;
 	senalcodo = 1;
 }
+if(receptor.selector == 'S'){
+
+	HAL_UART_Receive_IT(&huart5,(uint8_t*) gripper.buffer,   4*sizeof(char));
+	receptor.selector = 0;
+
+}
+
+
 
 else HAL_UART_Receive_IT(&huart5, &receptor.selector,  sizeof(uint8_t ));
 
@@ -226,6 +238,8 @@ int CaclValue(Lector motor){
 			}
 		if(motor.coma == 2)
 				value = ((motor.buffer[0]-48)*10 + (motor.buffer[1]-48)) ;
+		//if(motor.buffer[3] == 0)
+				//		value = ((motor.buffer[0]-48)*10 + (motor.buffer[1]-48)) ;
 
 			else
 				value= (motor.buffer[0]-48)  ;
@@ -241,13 +255,24 @@ int CaclValue(Lector motor){
   // el segundo caracter no envia bien -> so  se muevee bien en memoria? se salta la pos 2 .
 int PID (int consigna, int lectura){
 	int salida;
-    float integrador;
+   // float integrador;
 	error = consigna-lectura;
-	proporcional = dt*a*error;
-    integrador += (b*error);
+	proporcional = a*error;
+    integrador = (b*error);
 	salida = proporcional + integrador;
 return salida;
 }
+
+int PID2 (int consigna, int lectura){
+	int salida;
+   // float integrador;
+	error = consigna-lectura;
+	proporcional = a2*error;
+    integrador2 += (b2*error);
+	salida = proporcional + integrador;
+return salida;
+}
+
 
  //Implementacion de modelo cinemático inverso
  // INPUT : x,yz . VALUE = L1,L2
@@ -359,7 +384,7 @@ inverseKinematic(40.62,-13.91,9.60);
 	  //test
 	  	  if (final_carrera_2 == 0){
 	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 400);
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 700);
 	  	  }
 
   }
@@ -383,7 +408,7 @@ inverseKinematic(40.62,-13.91,9.60);
 motorbase.valor = 0;
 motorcodo.valor= 0;
 servomotor.valor =0;
-
+gripper.valor = 0;
 
 
 
@@ -407,9 +432,9 @@ servomotor.valor =0;
 
 
 //motorbase.valor =440-  (motorbase.valor)*10;
-motorbase.valor = (-2)* CaclValue(motorbase) +150;
+motorbase.valor = (-4)* CaclValue(motorbase) +150;
 if(motorbase.valor<0) motorbase.valor =0;
-if (motorbase.valor > 240) motorbase.valor = 240;
+if (motorbase.valor > 330) motorbase.valor = 330;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
 //el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
@@ -435,15 +460,15 @@ if(   prueba == 0){
 //motorbase.valor = 300;
 current_time = HAL_GetTick();
 //proportional
-salida =PID(encoder,motorbase.valor);
+
 
 if(  (encoder ) >(motorbase.valor ) && final_carrera == 0    ){
 	dt = HAL_GetTick()- current_time;
 prueba = a*(encoder-motorbase.valor);
-
+salida =PID2(encoder,motorbase.valor);
 	//prueba = receptor.pos - salida;
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, prueba); //prueba
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, salida); //prueba
 
 
 	   }
@@ -451,8 +476,8 @@ else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [
 	dt = HAL_GetTick()- current_time;
 //	salida =PID(motorbase.valor, encoder);
 	prueba = a*(motorbase.valor - encoder);
-
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,prueba);//1000, aqui es sincrono, PRUEBA
+	salida =PID2(motorbase.valor,encoder);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,salida);//1000, aqui es sincrono, PRUEBA
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); //cambiarlo por salidas analogcas  PWM
 
 }
@@ -467,7 +492,7 @@ else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [
 
 //motorcodo.valor =440-  (motorcodo.valor)*10;
 
-motorcodo.valor = -13*CaclValue(motorcodo) + 975; // 4  300
+motorcodo.valor = -20*CaclValue(motorcodo) + 975; // 4  300
 if(motorcodo.valor<0) motorcodo.valor =0;
 if(motorcodo.valor>2000) motorcodo.valor =2000;
 //if(motorcodo.valor>650) motorcodo.valor =650;
@@ -506,7 +531,7 @@ prueba2 = a*(encoder2-motorcodo.valor);
 salida2 =PID(encoder2,motorcodo.valor);
 	//prueba = receptor.pos - salida;2
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, prueba2); //prueba
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, salida2); //prueba
 
 
 	   }
@@ -515,7 +540,7 @@ else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : 
 	salida2 =PID(motorcodo.valor, encoder2);
 	prueba2 = a*(motorcodo.valor - encoder2);
 
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,prueba2);//1000, aqui es sincrono, PRUEBA
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,salida2);//1000, aqui es sincrono, PRUEBA
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); //cambiarlo por salidas analogcas  PWM
 
 }
@@ -530,22 +555,28 @@ else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : 
 //val = (buffe[0]-48)*100+ (buffe[1]-48)*10+ buffe[2]-48 - 30 ;
 
 
-servomotor.valor = (CaclValue(servomotor)*0.5) + 150;
+servomotor.valor = (CaclValue(servomotor)*0.9) + 150;
 //servomotor.valor = 120;
-if (servomotor.valor >200) servomotor.valor= 200;
+if (servomotor.valor >240) servomotor.valor= 240;
 if (servomotor.valor <100) servomotor.valor= 100;
 
 //secuencia para eliminar el fecto del retaro para la señal
-if(HAL_GetTick() - Delta_time >10 ){
+//if(HAL_GetTick() - Delta_time >10 ){
+//
+//	Delta_time = HAL_GetTick();
+//	error_servo = servomotor.valor - step; // puede ser negativo
+//	step = step + error_servo/8;
+//
+//}
 
-	Delta_time = HAL_GetTick();
-	error_servo = servomotor.valor - step; // puede ser negativo
-	step = step + error_servo/8;
 
-}
+__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,servomotor.valor);
 
 
-__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,step);
+gripper.valor = ((gripper.buffer[0]-48)*100 + (gripper.buffer[1]-48)*10 +(gripper.buffer[2]-48)) *1-70;
+
+if (gripper.valor < 90) gripper.valor = 90;
+__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,gripper.valor);
 
   }
 
