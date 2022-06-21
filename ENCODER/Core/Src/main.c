@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include <math.h>
 #include <stdlib.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,9 +77,9 @@ int encoder;
 int encoder2;
  int final_carrera;
  int final_carrera_2;
-
+int test=0;
 #define TAMBUFFER 12
-
+double trans_time;
 typedef struct {
 uint8_t buffer[10];
 uint8_t selector;
@@ -96,6 +97,25 @@ typedef struct{
 	int valor;
 }Lector;
 
+typedef struct{
+float	Kp;
+float Ki;
+float integrador;
+double current_time;
+}PID_struct;
+
+PID_struct pid = {
+    .Kp = 5.2268,
+    .Ki = 2.4363,
+    .integrador = 0
+
+};
+PID_struct pid_base = {
+    .Kp = 5.2268,
+    .Ki = 2.4363,
+    .integrador = 0
+
+};
 
 int prueba;
 int prueba2;
@@ -104,6 +124,7 @@ Lector servomotor;
 Lector motorbase;
 Lector motorcodo;
 Lector gripper;
+
 //SERVOMOTOR
 float Delta_time;
 int step;
@@ -111,23 +132,35 @@ int error_servo;
 
 //varaibles PID
 float error;
+float error2;
 float proporcional;
 float proporcional2;
 float integrador = 0;
-float integrador2 = 0;
-float derivador_prev;
-float a =1;//3
-float a2 = 2;
-float b = 0.11;//0.1
-float b2 = 0.11;
-float c = 0.0002;
+float integrador2 =0 ;
+float error_prev= 0;
+float error_prev2;
+float derivativo;
+float derivativo_prev= 0;
+float alpha=0.1;
+float derivativo2;
+int signo;
+float a =5.2268;//11.5;//9 //valores teoricos 2.87
+float a2 = 4;
+float b = 2.4363;//16.4  //valores teoricos 8.065
+float b2 =1;
+float c =0; //5.5
+float c2=0;
 float dt;
 float dt2;
 float current_time;
 float current_time2;
 //función PID
-int salida;
+int salidaX;
 int salida2;
+
+float pid_error;
+
+
 
 
 
@@ -147,6 +180,7 @@ final_carrera = 1;
 	final_carrera_2 = 1;
 	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1,0);
 	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2,0);
+
 	}
 	else
 		final_carrera_2= 0;
@@ -254,26 +288,133 @@ int CaclValue(Lector motor){
 // lee mal al principio , hay que tmetelre un epacio y lo hce 2veces(inicilaizacion en non blocking?)
   // el segundo caracter no envia bien -> so  se muevee bien en memoria? se salta la pos 2 .
 int PID (int consigna, int lectura){
-	int salida;
+	float salida;
+	dt = HAL_GetTick()-current_time;
    // float integrador;
-	error = consigna-lectura;
-	proporcional = a*error;
-    integrador = (b*error);
-	salida = proporcional + integrador;
+	error = consigna-lectura;  //letura de los errores en unidades de encoder
+ error = error* (2*3.14)/7600 ; //lo paso a unidades de angulo
+	proporcional = a*error; //LO PASO A VOLTIOS  (1700/8.31)
+    integrador += ((b)*error)*dt/1000;
+    //me protejo del efecto windup limitando la aculumación del integrador
+
+//   if (integrador  > 500) integrador = 500; //que esro sea el error
+//   if (integrador  < -500) integrador = -500;
+   //  derivativo =c*((error-error_prev)/(dt/1000));
+     derivativo =  c*(lectura* (2*3.14)/7600 -error_prev)/dt;
+   //filtro paso bajo
+    // derivativo = alpha*derivativo +(1-alpha)*derivativo_prev;
+     //derivativo = c*(( (error-error_prev)/(dt/1000))*alpha + (1-alpha)*derivativo    );
+   //  if(derivativo> 2000) derivativo =0;
+
+//	else integrador= 0;
+     //efectos de la tensión
+	salida = (proporcional +integrador  - derivativo);
+
+
+	signo = salida/fabs(salida);
+
+	if(fabs(salida) >= 2){
+		salida = signo*(fabs(salida)-0.92)/0.005; //signo*(abs(salida)-0.92)/0.005
+	}
+	if((fabs(salida) < 2)  ){//&& (salida >1.2)  // if((error < 2)  )
+		salida = signo*(fabs(salida)-0.37)/0.0084; //signo*(abs(salida)-0.37)/0.0084
+		}
+//	if((fabs(salida) < 1)  ){//&& (salida >1.2)  // if((error < 2)  )
+//			salida = 0; //signo*(abs(salida)-0.37)/0.0084
+//			}
+	//else salida = 0;//salida/0.0041;
+if((fabs(consigna-lectura) <  5) ) {
+	if (fabs(integrador) < 1.5)
+	integrador = 0;
+	proporcional = 0;
+	derivativo=0;
+
+}
+	//limitacion de la salida
+	if(salida >2000) salida = 2000;
+	if(salida <-2000) salida = -2000;
+	//no linealidad
+	//if ( (salida <250) && (salida >100)) habra que tratar la parte baja del sistema
+
+
+	error_prev =lectura* (2*3.14)/7600;// error;
+
+
+	current_time = HAL_GetTick();
 return salida;
 }
+float PWM_Control(float output){
+	int signo = output/fabs(output);
+
+	if(fabs(output) >= 2){
+		output = signo*(fabs(output)-0.92)/0.005; //signo*(abs(salida)-0.92)/0.005
+	}
+	if((fabs(output) < 2)  ){//&& (salida >1.2)  // if((error < 2)  )
+		output = signo*(fabs(output)-0.37)/0.0084; //signo*(abs(salida)-0.37)/0.0084
+		}
+//	if(fabs(output) <1 )output = 0;
+	return output;
+}
+
+
+
+int PID_fun (int consigna, int lectura,PID_struct *pid){
+	float salida;
+	 double dt = HAL_GetTick()-pid->current_time;
+
+	error = consigna-lectura;  //letura de los errores en unidades de encoder
+ error = error* (2*3.14)/7600 ; //lo paso a unidades de angulo
+	 float proporcional = pid->Kp*error; //LO PASO A VOLTIOS  (1700/8.31)
+    pid->integrador += ((pid->Ki)*error)*dt/1000;
+
+	salida = (proporcional + pid->integrador - derivativo);
+
+	salida = PWM_Control(salida);
+if(salida <1.1 && error >0.1) salida =1.1;
+
+
+if((fabs(consigna-lectura) <  5) ) {
+	if (fabs(integrador) < 2) // 1.5
+	integrador = 0;
+	proporcional = 0;
+	derivativo=0;
+
+}
+
+	if(salida >2000) salida = 2000;
+	if(salida <-2000) salida = -2000;
+	pid->current_time = HAL_GetTick();
+return salida;
+}
+
+
+
+
 
 int PID2 (int consigna, int lectura){
+
 	int salida;
-   // float integrador;
-	error = consigna-lectura;
-	proporcional = a2*error;
-    integrador2 += (b2*error);
-	salida = proporcional + integrador;
+	dt2 = HAL_GetTick()-current_time2;
+	error2 = consigna-lectura;
+	error2 = error2* (2*3.14)/7760 ;
+	proporcional2 = (2000/12)*a2*error2;
+	 integrador2 += (2000/12)*(b2*error2)*0.011;
+//	 if (integrador2  > 1000) integrador = 1000; //que esro sea el error
+//	     if (integrador2  < -1000) integrador = -1000;
+	 derivativo2 = (2000/12)*c2*(error2-error_prev2)/(dt/1000);
+	salida = proporcional2 + integrador2 +derivativo2;
+	error_prev2 = error2;
+	current_time2 = HAL_GetTick();
 return salida;
 }
 
 
+
+
+
+float GetTime(){
+return HAL_GetTick();
+}
  //Implementacion de modelo cinemático inverso
  // INPUT : x,yz . VALUE = L1,L2
   float x_c;
@@ -295,6 +436,8 @@ double r;
 
 
 
+
+int32_t* encoder_test;
 /* USER CODE END 0 */
 
 /**
@@ -304,6 +447,7 @@ double r;
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+
 
   /* USER CODE END 1 */
 
@@ -348,6 +492,13 @@ int main(void)
   //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
   //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
 
+
+  //inicio los encoder para las pruebas
+ // HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+ // HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL); //puedo inic
+ // encoder_test = &(TIM3->CNT);
+
+
 /*__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,2000);
 __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3,2000);
 __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4,2000);
@@ -368,23 +519,31 @@ resetBuffer(receptor.buffer);
 
   //secuencia de arranque
 integrador =0;
+error_prev =0;
+error_prev2 = 0;
 step = 100;
-inverseKinematic(40.62,-13.91,9.60);
 
- HAL_Delay(100);
+
+ HAL_Delay(100); //100
 
   final_carrera = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
   final_carrera_2 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5);
   while (((final_carrera_2 == 0) || (final_carrera == 0))){
 	  	  if(final_carrera == 0){
 	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,400);
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,400);//400
 	  	  }
 
 	  //test
 	  	  if (final_carrera_2 == 0){
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 700);
+	  //__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);  //0
+	 // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 100);//600
+
+	  		  TIM4->CCR1 = 00;
+	  		TIM4->CCR4 = 400;
+	  		//__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4,PWM_Control(4)); // mas bonito pero da igual 400
+
+	//  encoder2  = TIM3->CNT;
 	  	  }
 
   }
@@ -403,21 +562,25 @@ inverseKinematic(40.62,-13.91,9.60);
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); //100
   HAL_Delay(100);
-  HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
-  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL); //puedo iniciar el temprizaodr despues y asi no hace falta reiniciarlo?
+  //HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+ // HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL); //puedo iniciar el temprizaodr despues y asi no hace falta reiniciarlo?
 motorbase.valor = 0;
 motorcodo.valor= 0;
 servomotor.valor =0;
 gripper.valor = 0;
+ HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+ HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL); //puedo inic
 
 
-
-
+ integrador2  = 0;
 
 //Pruebas
 
-
-
+current_time =HAL_GetTick();
+current_time2 =HAL_GetTick();
+trans_time =HAL_GetTick();
+pid.current_time = HAL_GetTick();
+pid_base.current_time = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -429,18 +592,33 @@ gripper.valor = 0;
 
 
 	//procesar la info recibida
-
-
+	//  motorcodo.valor = (90-( (CaclValue(motorcodo)) ) ) *7600/(180*2); // 4  300
+	  motorbase.valor = (90-(CaclValue(motorbase))) *7600/(180*2); // 4  300
 //motorbase.valor =440-  (motorbase.valor)*10;
-motorbase.valor = (-4)* CaclValue(motorbase) +150;
+//motorbase.valor = (-4)* CaclValue(motorbase) +150;
+
+	  if( HAL_GetTick() -trans_time >140000 ){
+		  motorcodo.valor = 1000;
+	  }
+	  else if ( HAL_GetTick() -trans_time >100000 ){
+		  motorcodo.valor = 2400;
+	  }
+	  else if ( HAL_GetTick() -trans_time >60000 ){
+	 		  motorcodo.valor = 300;
+	 	  }
+	  else if ( HAL_GetTick() -trans_time >15000 ){
+	 		  motorcodo.valor = 2000;
+	 	  }
+	  else motorcodo.valor = 0000;
+	//  trans_time = HAL_GetTick();
 if(motorbase.valor<0) motorbase.valor =0;
-if (motorbase.valor > 330) motorbase.valor = 330;
+if (motorbase.valor > 1000) motorbase.valor = 1000;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
 //el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
 // quizás no usar directamente el valor del contador, sino una versión filtrada del mismo
 encoder =  TIM2->CNT;
-if(encoder > 5000) encoder = 0; // ha dado mas vuelta de la necesaria
+if(encoder > 7000) encoder = 0; // ha dado mas vuelta de la necesaria
 
 
 
@@ -458,29 +636,58 @@ if(   prueba == 0){
 */
 //dt = HAL_GetTick()-current_time;
 //motorbase.valor = 300;
-current_time = HAL_GetTick();
+
 //proportional
+salidaX =PID_fun(motorbase.valor,encoder,&pid_base);
+if(  salidaX> 0   ){ //  && final_carrera_2 == 0  hay que meter condicion de final de carrera para descargar la accion integral
 
 
-if(  (encoder ) >(motorbase.valor ) && final_carrera == 0    ){
-	dt = HAL_GetTick()- current_time;
-prueba = a*(encoder-motorbase.valor);
-salida =PID2(encoder,motorbase.valor);
-	//prueba = receptor.pos - salida;
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, salida); //prueba
+
+
+
+
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,salidaX);//1000, aqui es sincrono, PRUEBA
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); //cambiarlo por salidas analogcas  PWM
 
 
 	   }
-else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
-	dt = HAL_GetTick()- current_time;
-//	salida =PID(motorbase.valor, encoder);
-	prueba = a*(motorbase.valor - encoder);
-	salida =PID2(motorbase.valor,encoder);
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,salida);//1000, aqui es sincrono, PRUEBA
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); //cambiarlo por salidas analogcas  PWM
+else if (salidaX < 0  && final_carrera_2 == 0 ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
 
+
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, -salidaX); //prueba
 }
+
+
+
+
+
+
+//
+//
+//
+//if(  (encoder ) >(motorbase.valor ) && final_carrera == 0    ){
+//
+//prueba = a*(encoder-motorbase.valor);
+//
+//
+//
+//salida =PID2(encoder,motorbase.valor);
+//	//prueba = receptor.pos - salida;
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, salida); //prueba
+//
+//
+//	   }
+//else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
+//	//dt = HAL_GetTick()- current_time;
+////	salida =PID(motorbase.valor, encoder);
+//	prueba = a*(motorbase.valor - encoder);
+//	salida =PID2(motorbase.valor,encoder);
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,salida);//1000, aqui es sincrono, PRUEBA
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); //cambiarlo por salidas analogcas  PWM
+//
+//}
 
 
 // MOTOR CODO SIN SENSOR DE CARRERA
@@ -492,16 +699,19 @@ else if (  (encoder ) <( motorbase.valor  ) ){  // cmbiar por leer el buffer : [
 
 //motorcodo.valor =440-  (motorcodo.valor)*10;
 
-motorcodo.valor = -20*CaclValue(motorcodo) + 975; // 4  300
-if(motorcodo.valor<0) motorcodo.valor =0;
-if(motorcodo.valor>2000) motorcodo.valor =2000;
+//motorcodo.valor = -20*CaclValue(motorcodo) + 975; // 4  300
+
+//if(motorcodo.valor<0) motorcodo.valor =0;
+//if(motorcodo.valor>2300) motorcodo.valor =2300;
+//motorcodo.valor =2420;
+//motorcodo.valor = 1200;
 //if(motorcodo.valor>650) motorcodo.valor =650;
 //receptor.pos =  ((receptor.buffer[0] - 48)*1000) +	((receptor.buffer[1] - 48)*100) + ((receptor.buffer[2] - 48)*10) + ((receptor.buffer[3] -48));
 
 //el numero de vueltas es como de 6800. No se deben tolerar valores por encima ni por debajo de esos valores
 // quizás no usar directamente el valor del contador, sino una versión filtrada del mismo
 encoder2 =  TIM3->CNT;
-if(encoder2 > 5000) encoder2 = 0; // ha dado mas vuelta de la necesaria
+if(encoder2 > 7000) encoder2 = 0; // ha dado mas vuelta de la necesaria
 
 
 
@@ -519,31 +729,65 @@ if(   prueba == 0){
 */
 //dt = HAL_GetTick()-current_time;
 //motorcodo.valor = 100;
-current_time2 = HAL_GetTick();
+
 //proportional
 
+//salida2 =PID(motorcodo.valor, encoder2);
+salida2 =PID_fun(motorcodo.valor, encoder2,&pid);
+//salida2 = PID_exp(motorcodo.valor, encoder2,&pid);
+if(  salida2> 0   ){ //  && final_carrera_2 == 0  hay que meter condicion de final de carrera para descargar la accion integral
 
 
+//salida2 =PID(encoder2,motorcodo.valor);
 
-if(  (encoder2 ) >(motorcodo.valor ) && final_carrera_2 == 0  ){
-	dt2 = HAL_GetTick()- current_time2;
-prueba2 = a*(encoder2-motorcodo.valor);
-salida2 =PID(encoder2,motorcodo.valor);
+
 	//prueba = receptor.pos - salida;2
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, salida2); //prueba
 
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,salida2);//1000, aqui es sincrono, PRUEBA
+//		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); //cambiarlo por salidas analogcas  PW
+
+
+		TIM4->CCR1 = salida2;
+		TIM4->CCR4=0;
 
 	   }
-else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
-	dt2 = HAL_GetTick()- current_time2;
-	salida2 =PID(motorcodo.valor, encoder2);
-	prueba2 = a*(motorcodo.valor - encoder2);
+else if (salida2 < 0  && final_carrera_2 == 0 ){  //&& final_carrera_2 == 0  cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
 
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,salida2);//1000, aqui es sincrono, PRUEBA
-	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); //cambiarlo por salidas analogcas  PWM
 
+
+
+
+	 TIM4->CCR1 = 0;
+	 TIM4->CCR4=-salida2;
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, -salida2); //prueba
 }
+
+
+
+//old code
+
+//if(  (encoder2 ) >(motorcodo.valor ) && final_carrera_2 == 0  ){
+//
+//prueba2 = a*(encoder2-motorcodo.valor);
+////salida2 =PID(encoder2,motorcodo.valor);
+//salida2 =PID(motorcodo.valor, encoder2);
+//
+//	//prueba = receptor.pos - salida;2
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, -salida2); //prueba
+//
+//
+//	   }
+//else if (  (encoder2 ) <( motorcodo.valor  ) ){  // cmbiar por leer el buffer : [0]*1000 + [1]*100 +[2]*10 +[3] (todos +48 para concordar con ASCI)
+//
+//	salida2 =PID(motorcodo.valor, encoder2);
+//	prueba2 = a*(motorcodo.valor - encoder2);
+//
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,salida2);//1000, aqui es sincrono, PRUEBA
+//	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); //cambiarlo por salidas analogcas  PWM
+//
+//}
 
 
 
@@ -573,11 +817,14 @@ if (servomotor.valor <100) servomotor.valor= 100;
 __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,servomotor.valor);
 
 
-gripper.valor = ((gripper.buffer[0]-48)*100 + (gripper.buffer[1]-48)*10 +(gripper.buffer[2]-48)) *1-70;
+gripper.valor = ((gripper.buffer[0]-48)*100 + (gripper.buffer[1]-48)*10 +(gripper.buffer[2]-48)) *1;
 
-if (gripper.valor < 90) gripper.valor = 90;
-__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,gripper.valor);
+if (gripper.valor < 140) //gripper.valor = 120;
+__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,90);
+else
+	__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,140);
 
+HAL_Delay(1);
   }
 
 
